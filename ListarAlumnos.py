@@ -3,25 +3,27 @@ import pymysql
 import os
 
 def lambda_handler(event, context):
-    # Parámetros de conexión (puedes usar Parameter Store o Secrets Manager para mayor seguridad)
     SSM_host = os.environ['DB_HOST']
     user = os.environ['DB_USER']
-    SSM_password = os.environ['DB_PASSWORD']
+    Secret_password = os.environ['DB_PASSWORD']
     database = os.environ['DB_NAME']
 
-    # Recuperar los secretos
+    # 1. Recuperar el host desde Parameter Store (SSM)
     ssm = boto3.client('ssm')
-    response = ssm.get_parameter(
+    response_host = ssm.get_parameter(
         Name=SSM_host,
-        WithDecryption=True  # Si es un parámetro seguro
+        WithDecryption=True
     )
-    host = response['Parameter']['Value']
-    response = ssm.get_parameter(
-        Name=SSM_password,
-        WithDecryption=True  # Si es un parámetro seguro
-    )
-    password = response['Parameter']['Value']
+    host = response_host['Parameter']['Value']
 
+    # 2. Recuperar el password desde Secrets Manager
+    secrets_client = boto3.client('secretsmanager')
+    response_pass = secrets_client.get_secret_value(
+        SecretId=Secret_password
+    )
+    password = response_pass['SecretString']
+
+    connection = None
     try:
         connection = pymysql.connect(
             host=host,
@@ -32,7 +34,7 @@ def lambda_handler(event, context):
         )
 
         with connection.cursor() as cursor:
-            cursor.execute("SELECT * FROM alumnos;")  # Ajusta el nombre de la tabla según tu caso
+            cursor.execute("SELECT * FROM alumnos;")
             results = cursor.fetchall()
 
         return {
